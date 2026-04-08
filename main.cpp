@@ -23,6 +23,21 @@ public:
     }
 };
 
+class Block
+{
+    public:
+    int x, y;
+    int width = 100, height = 100;
+
+    public:
+    void Draw(SDL_Renderer *renderer)
+    {
+        SDL_Rect rect_block = {x, y, width, height};
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
+        SDL_RenderFillRect(renderer, &rect_block);
+    }
+};
+
 class Player
 {
 public:
@@ -48,7 +63,7 @@ public:
     }
 
 public:
-    void Update(int groundY, InputManager &inputManager)
+    void Update(int groundY, InputManager &inputManager, Block block)
     {
         if (inputManager.isKeyHeld(SDLK_LEFT))
         {
@@ -58,6 +73,14 @@ public:
         {
             x += speed; // 右に移動
         }
+
+        //移動先に障害物があったらそこで停止させる処理を記述します。
+        if(block.x < x || block.x + block.width > x + width || block.y < y || block.y + block.height > y + height)
+        {
+            x -= speed; // 障害物に当たったら元の位置に戻す
+            return;
+        }
+
         if (inputManager.isKeyHeld(SDLK_SPACE) && isGround)
         {
             Jump();
@@ -116,21 +139,6 @@ public:
     }
 };
 
-class Block
-{
-    public:
-    int x, y;
-    int width = 100, height = 100;
-
-    public:
-    void Draw(SDL_Renderer *renderer)
-    {
-        SDL_Rect rect_block = {x, y, width, height};
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
-        SDL_RenderFillRect(renderer, &rect_block);
-    }
-};
-
 int main()
 {
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -171,6 +179,7 @@ int main()
 
     Ground ground;
     BackGround backGround;
+    Block block;
 
     while (running)
     {                                 // 一応Update()的なやつだね。
@@ -181,13 +190,13 @@ int main()
                 running = false;
             }
         }
-
         backGround.Draw(renderer); // 背景を描く感じだね。これも毎回描いてるからUpdate()的なやつだね。
 
-        player.Update(ground.y, inputManager);
+        player.Update(ground.y, inputManager, block);
         player.Draw(renderer);
 
         ground.Draw(renderer);
+        block.Draw(renderer);
 
         SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
         SDL_Delay(16);               // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
