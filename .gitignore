@@ -1,0 +1,25 @@
+# ビルドファイル
+*.o
+*.out
+*.exe
+*.app
+
+# コンパイル結果
+game
+a.out
+
+# CMake使う場合
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# VSCode
+.vscode/
+
+# mac
+.DS_Store
+
+# その他
+*.log
