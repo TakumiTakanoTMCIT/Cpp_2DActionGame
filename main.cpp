@@ -116,6 +116,21 @@ public:
     }
 };
 
+class Block
+{
+    public:
+    int x, y;
+    int width = 100, height = 100;
+
+    public:
+    void Draw(SDL_Renderer *renderer)
+    {
+        SDL_Rect rect_block = {x, y, width, height};
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
+        SDL_RenderFillRect(renderer, &rect_block);
+    }
+};
+
 int main()
 {
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
