@@ -35,13 +35,7 @@ public:
 	int Top() { return y; }
 	int Bottom() { return y + height; }
 
-	Block(int x, int y, int width, int height) : x(x), y(y), width(width), height(height)
-	{
-		x = x;
-		y = y;
-		width = width;
-		height = height;
-	}
+	Block(int x, int y, int width, int height) : x(x), y(y), width(width), height(height) {}
 
 public:
 	void Draw(SDL_Renderer *renderer)
