@@ -1,9 +1,26 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
+
+class EventMediator
+{
+public:
+	static std::function<void()> onPlayerStumpEnemy;
+
+public:
+	static void PlayerStumpEnemy()
+	{
+		if (onPlayerStumpEnemy)
+		{
+			onPlayerStumpEnemy();
+		}
+	}
+};
+std::function<void()> EventMediator::onPlayerStumpEnemy = nullptr;
 
 class InputManager
 {
@@ -98,6 +115,112 @@ public:
 	}
 };
 
+class Goal
+{
+public:
+	int x = 0, y = 0;
+	int width = 100, height = 100;
+
+	Goal(int x, int y) : x(x), y(y) {}
+
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+	void Draw(SDL_Renderer *renderer, Camera &camera)
+	{
+		SDL_SetRenderDrawColor(renderer, 80, 220, 255, 255);
+		SDL_Rect rect_goal = {x - camera.x, y - camera.y, width, height};
+		SDL_RenderFillRect(renderer, &rect_goal);
+	}
+};
+
+class Hazard
+{
+public:
+	enum Type
+	{
+		Enemy,
+		Magma,
+	};
+
+	int moveSpeed = 2;
+	int x = 0, y = 0;
+	int width = 100, height = 100;
+	Type myType;
+
+	Hazard(int x, int y, Type type) : x(x), y(y), myType(type) {}
+
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+	void Draw(SDL_Renderer *renderer, Camera &camera)
+	{
+		if (myType == Enemy)
+		{
+			SDL_SetRenderDrawColor(renderer, 220, 200, 40, 255);
+		}
+		else if (myType == Magma)
+		{
+			SDL_SetRenderDrawColor(renderer, 255, 90, 20, 255);
+		}
+
+		SDL_Rect rect_hazard = {x - camera.x, y - camera.y, width, height};
+		SDL_RenderFillRect(renderer, &rect_hazard);
+	}
+
+public:
+	void Update()
+	{
+		if (myType == Enemy)
+		{
+			x += moveSpeed; // 敵が右に移動する例
+			if (x > 800) // 画面外に出たら左に戻る
+			{
+				x = -width;
+			}
+		}
+	}
+};
+
+struct StageData
+{
+	std::vector<Block> blocks;
+	std::vector<Hazard> hazards;
+	std::vector<Goal> goals;
+};
+
+enum class GameScene
+{
+	Title,
+	Playing,
+};
+
+class BackGround
+{
+public:
+	void Draw(SDL_Renderer *renderer)
+	{
+		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
+		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
+	}
+};
+
+class TitleScreen
+{
+public:
+	void Draw(SDL_Renderer *renderer, int screenWidth, int screenHeight)
+	{
+		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+		SDL_SetRenderDrawColor(renderer, 192, 205, 202, 100);
+		SDL_Rect overlay = {0, 0, screenWidth, screenHeight};
+		SDL_RenderFillRect(renderer, &overlay);
+	}
+};
+
 class Player
 {
 public:
@@ -109,6 +232,8 @@ public:
 	float gravity = 0.5f;
 	float maxFallSpeed = 12.0f;
 	bool isGround = false;
+	bool isDead = false;
+	bool isGoal = false;
 	int visualPixotX, visualPixotY;
 	SDL_Texture *texture = nullptr;
 
@@ -169,6 +294,8 @@ public:
 		y = startY;
 		yVelocity = 0.0f;
 		isGround = false;
+		isDead = false;
+		isGoal = false;
 		visualPixotX = x + drawWidth / 2;
 		visualPixotY = y + drawHeight / 2;
 	}
@@ -190,8 +317,37 @@ private:
 	}
 
 public:
-	void Update(InputManager &inputManager, std::vector<Block> &blocks)
+	bool IsColliderInHazard(Hazard &hazard)
 	{
+		bool isOverlapX = Right() > hazard.Left() && Left() < hazard.Right();
+		bool isOverlapY = Bottom() > hazard.Top() && Top() < hazard.Bottom();
+		return isOverlapX && isOverlapY;
+	}
+
+	bool IsColliderInGoal(Goal &goal)
+	{
+		bool isOverlapX = Right() > goal.Left() && Left() < goal.Right();
+		bool isOverlapY = Bottom() > goal.Top() && Top() < goal.Bottom();
+		return isOverlapX && isOverlapY;
+	}
+
+public:
+	void Start()
+	{
+		EventMediator::onPlayerStumpEnemy = [this]()
+		{
+			std::cout << "プレイヤーが敵を踏んだときの処理！" << std::endl;
+			Jump();
+			// ここに敵を踏んだときの処理を追加できます。例えばスコアを増やすとか、特定のアイテムを出現させるとか、色々できます。
+		};
+	}
+
+public:
+	void Update(InputManager &inputManager, std::vector<Block> &blocks, StageData &stageData, int fallResetY)
+	{
+		isDead = y > fallResetY;
+		isGoal = false;
+
 		bool wasGround = isGround;
 		isGround = false;
 
@@ -226,6 +382,7 @@ public:
 		}
 
 		int previousY = y;
+		int previousBottom = Bottom();
 		y += static_cast<int>(yVelocity);
 
 		for (Block &block : blocks)
@@ -238,6 +395,40 @@ public:
 				{
 					isGround = true;
 				}
+			}
+		}
+
+		for (Hazard &hazard : stageData.hazards)
+		{
+			if (!IsColliderInHazard(hazard))
+			{
+				continue;
+			}
+
+			if (hazard.myType == Hazard::Enemy)
+			{
+				bool stomped = previousBottom <= hazard.Top() &&
+					Bottom() >= hazard.Top() &&
+					yVelocity > 0.0f;
+
+				if (stomped)
+				{
+					std::cout << "敵を踏んだ！" << std::endl;
+					hazard.x = -hazard.width;
+					hazard.y = 9999;
+					EventMediator::PlayerStumpEnemy();
+					continue;
+				}
+			}
+
+			isDead = true;
+		}
+
+		for (Goal &goal : stageData.goals)
+		{
+			if (IsColliderInGoal(goal))
+			{
+				isGoal = true;
 			}
 		}
 
@@ -266,28 +457,18 @@ public:
 	}
 };
 
-class BackGround
+StageData CreateStage(Player &player)
 {
-public:
-	void Draw(SDL_Renderer *renderer)
-	{
-		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
-		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
-	}
-};
-
-std::vector<Block> CreateStage(Player &player)
-{
-	std::vector<Block> blocks;
+	StageData stageData;
 
 	std::vector<std::string> stage = {
-		"........B.",
-		"........B.",
-		".......B..",
-		".......B..",
-		"....B.....",
-		"..B.B.....",
-		"GGGGGGGGGG",
+		"........B.....",
+		"........B....C",
+		".......B......",
+		".......B......",
+		"....B.........",
+		"..B.B......E..",
+		"GGGGGGGG..MMGG",
 	};
 
 	int blockSize = 100;
@@ -302,16 +483,28 @@ std::vector<Block> CreateStage(Player &player)
 
 			if (tile == 'G')
 			{
-				blocks.emplace_back(x, y, Block::Ground);
+				stageData.blocks.emplace_back(x, y, Block::Ground);
 			}
 			else if (tile == 'B')
 			{
-				blocks.emplace_back(x, y, Block::Brick);
+				stageData.blocks.emplace_back(x, y, Block::Brick);
+			}
+			else if (tile == 'E')
+			{
+				stageData.hazards.emplace_back(x, y, Hazard::Enemy);
+			}
+			else if (tile == 'M')
+			{
+				stageData.hazards.emplace_back(x, y, Hazard::Magma);
+			}
+			else if (tile == 'C')
+			{
+				stageData.goals.emplace_back(x, y);
 			}
 		}
 	}
 
-	return blocks;
+	return stageData;
 }
 
 int main()
@@ -370,10 +563,15 @@ int main()
 	Player player;
 	Camera camera;
 	BackGround backGround;
-	std::vector<Block> blocks = CreateStage(player);
+	TitleScreen titleScreen;
+	StageData stageData = CreateStage(player);
+	GameScene currentScene = GameScene::Title;
 	camera.Start(screenWidth, screenHeight);
+	player.Start();
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
 	player.Reset(playerStartX, playerStartY);
+	SDL_SetWindowTitle(window, "My Game - Press Space or Enter to Start");
+	std::cout << "タイトル画面: Space か Enter でスタート" << std::endl;
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -383,22 +581,62 @@ int main()
 			{
 				running = false;
 			}
+
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_SPACE, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
+				std::cout << "ゲームスタート！" << std::endl;
+			}
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_RETURN, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
+				std::cout << "ゲームスタート！" << std::endl;
+			}
 		}
 		backGround.Draw(renderer);
 
-		player.Update(inputManager, blocks);
-		camera.Update(player.visualPixotX, player.visualPixotY);
-
-		if (player.y > fallResetY)
+		if (currentScene == GameScene::Playing)
 		{
-			player.Reset(playerStartX, playerStartY);
-			camera.Start(screenWidth, screenHeight);
+			player.Update(inputManager, stageData.blocks, stageData, fallResetY);
+			camera.Update(player.visualPixotX, player.visualPixotY);
+
+			if (player.isDead)
+			{
+				std::cout << "死んだ！" << std::endl;
+				player.Reset(playerStartX, playerStartY);
+				camera.Start(screenWidth, screenHeight);
+			}
+			else if (player.isGoal)
+			{
+				std::cout << "Goal!" << std::endl;
+				running = false;
+			}
 		}
 
 		player.Draw(renderer, camera);
-		for (Block &block : blocks)
+		for (Block &block : stageData.blocks)
 		{
 			block.Draw(renderer, camera);
+		}
+		for (Hazard &hazard : stageData.hazards)
+		{
+			hazard.Draw(renderer, camera);
+			if (currentScene == GameScene::Playing)
+			{
+				hazard.Update();
+			}
+		}
+		for (Goal &goal : stageData.goals)
+		{
+			goal.Draw(renderer, camera);
+		}
+		if (currentScene == GameScene::Title)
+		{
+			titleScreen.Draw(renderer, screenWidth, screenHeight);
 		}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
