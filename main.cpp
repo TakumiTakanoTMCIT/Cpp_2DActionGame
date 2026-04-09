@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 class InputManager
 {
@@ -33,6 +34,14 @@ public:
 	int Right() { return x + width; }
 	int Top() { return y; }
 	int Bottom() { return y + height; }
+
+	Block(int x, int y, int width, int height) : x(x), y(y), width(width), height(height)
+	{
+		x = x;
+		y = y;
+		width = width;
+		height = height;
+	}
 
 public:
 	void Draw(SDL_Renderer *renderer)
@@ -84,7 +93,7 @@ private:
 	}
 
 public:
-	void Update(int groundY, InputManager &inputManager, Block &block)
+	void Update(int groundY, InputManager &inputManager, std::vector<Block> &blocks)
 	{
 		bool wasGround = isGround;
 		isGround = false;
@@ -99,9 +108,12 @@ public:
 			x += speed; // 右に移動
 		}
 
-		if (IsColliderInBlock(block))
+		for (Block &block : blocks)
 		{
-			x = previousX;
+			if (IsColliderInBlock(block))
+			{
+				x = previousX;
+			}
 		}
 
 		if (inputManager.isKeyHeld(SDLK_SPACE) && wasGround)
@@ -119,13 +131,16 @@ public:
 		int previousY = y;
 		y += static_cast<int>(yVelocity);
 
-		if (IsColliderInBlock(block))
+		for (Block &block : blocks)
 		{
-			y = previousY;
-			yVelocity = 0.0f;
-			if (previousY + height <= block.Top())
+			if (IsColliderInBlock(block))
 			{
-				isGround = true;
+				y = previousY;
+				yVelocity = 0.0f;
+				if (previousY + height <= block.Top())
+				{
+					isGround = true;
+				}
 			}
 		}
 
@@ -209,7 +224,11 @@ int main()
 
 	Ground ground;
 	BackGround backGround;
-	Block block;
+	std::vector<Block> blocks = {
+		{100, 500, 200, 20},
+		{400, 400, 200, 20},
+		{700, 300, 200, 20},
+	};
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -223,11 +242,14 @@ int main()
 		backGround.Draw(
 			renderer); // 背景を描く感じだね。これも毎回描いてるからUpdate()的なやつだね。
 
-		player.Update(ground.y, inputManager, block);
+		player.Update(ground.y, inputManager, blocks);
 		player.Draw(renderer);
 
 		ground.Draw(renderer);
-		block.Draw(renderer);
+		for (Block &block : blocks)
+		{
+			block.Draw(renderer);
+		}
 
 		SDL_RenderPresent(
 			renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
