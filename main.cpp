@@ -27,18 +27,28 @@ class Camera
 {
 public:
 	int x;
-	int startX;
+	int y;
+	int startX, startY;
+	int bufferY;
 
 public:
-	void Start(int screenWidth)
+	void Start(int screenWidth, int screenHeight)
 	{
 		x = 0;
+		y = 0;
+		startY = screenHeight / 2;
 		startX = screenWidth / 2;
+		bufferY = screenHeight / 2;
 	}
 
 public:
-	void Update(int playerX)
+	void Update(int playerX, int playerY)
 	{
+		if (playerY < startY)
+		{
+			y = playerY - startY;
+		}
+
 		if (playerX > startX)
 		{
 			x = playerX - startX;
@@ -63,7 +73,7 @@ public:
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_block = {x - camera.x, y, width, height};
+		SDL_Rect rect_block = {x - camera.x, y - camera.y, width, height};
 		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
 		SDL_RenderFillRect(renderer, &rect_block);
 	}
@@ -80,6 +90,7 @@ public:
 	float gravity = 0.5f;
 	float maxFallSpeed = 12.0f;
 	bool isGround = false;
+	int visualPixotX;
 
 private:
 	void Jump()
@@ -165,12 +176,14 @@ public:
 		{
 			StayThisGround(groundY);
 		}
+
+		visualPixotX = x + width / 2; // プレイヤーの中心のX座標を更新
 	}
 
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_player = {x - camera.x, y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
+		SDL_Rect rect_player = {x - camera.x, y - camera.y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
 		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 		SDL_RenderFillRect(renderer, &rect_player); // rectを描くんだ〜！Fillだからまだわかりやすいかな？
 	}
@@ -195,7 +208,7 @@ public:
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_ground = {x - camera.x, y, width, height};
+		SDL_Rect rect_ground = {x - camera.x, y - camera.y, width, height};
 		SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 地面の色を茶色に設定
 		SDL_RenderFillRect(renderer, &rect_ground); // 地面を描く感じだね。
 	}
@@ -203,7 +216,7 @@ public:
 
 int main()
 {
-	int screenWidth = 1200;
+	int screenWidth = 1200, screenHeight = 800;
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
@@ -215,7 +228,7 @@ int main()
 		SDL_CreateWindow("My Game", // 名前
 						 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 						 screenWidth, // 横
-						 800, // 縦
+						 screenHeight, // 縦
 						 SDL_WINDOW_SHOWN);
 
 	if (window == nullptr)
@@ -246,10 +259,10 @@ int main()
 	std::vector<Block> blocks = {
 		{100, 500, 200, 20},
 		{400, 400, 200, 20},
-		{700, 300, 200, 20},
+		{100, 300, 200, 20},
 	};
 
-	camera.Start(screenWidth);
+	camera.Start(screenWidth, screenHeight);
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -263,7 +276,7 @@ int main()
 		backGround.Draw(renderer);
 
 		player.Update(ground.y, inputManager, blocks);
-		camera.Update(player.x);
+		camera.Update(player.visualPixotX, player.y);
 
 		player.Draw(renderer, camera);
 		ground.Draw(renderer, camera);
