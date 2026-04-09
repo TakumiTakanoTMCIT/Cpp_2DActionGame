@@ -135,9 +135,12 @@ g++ main.cpp App.cpp SoundManager.cpp Stage.cpp Player.cpp -std=c++17 -I/opt/hom
 
 
 ## お借りした素材一覧
-- フォント:ベストテン
+- フォント:ベストテン配布
+  - 配布URL:https://www.flopdesign.com/macosx-font-install.html
 - 効果音:効果音ラボ
-- ドット絵は自作しました
+  - 配布URL:https://soundeffect-lab.info/sound/button/
+- ドット絵:自作
+- 利用規約: 配布元の利用規約に従って使用しています
 
 ## 作者
 
