@@ -146,10 +146,10 @@ public:
 	int width = 100, height = 100;
 
 public:
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
+	int Left() const { return x; }
+	int Right() const { return x + width; }
+	int Top() const { return y; }
+	int Bottom() const { return y + height; }
 	Type myType;
 
 	// コンストラクタ
@@ -180,10 +180,10 @@ public:
 
 	Goal(int x, int y) : x(x), y(y) {}
 
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
+	int Left() const { return x; }
+	int Right() const { return x + width; }
+	int Top() const { return y; }
+	int Bottom() const { return y + height; }
 
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
@@ -206,16 +206,23 @@ public:
 	int x = 0, y = 0;
 	int width = 100, height = 100;
 	Type myType;
+	bool isActive = true;
 
 	Hazard(int x, int y, Type type) : x(x), y(y), myType(type) {}
 
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
+	int Left() const { return x; }
+	int Right() const { return x + width; }
+	int Top() const { return y; }
+	int Bottom() const { return y + height; }
 
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
+		// そもそもDrawを実行しなかったら見えないので非アクティブにするというのが直感的に理解できます！
+		if (!isActive)
+		{
+			return;
+		}
+
 		if (myType == Enemy)
 		{
 			SDL_SetRenderDrawColor(renderer, 220, 200, 40, 255);
@@ -230,15 +237,69 @@ public:
 	}
 
 public:
-	void Update()
+	void Remove()
 	{
-		if (myType == Enemy)
+		isActive = false;
+	}
+
+private:
+	bool IsStandingOnBlock(const Block &block, int checkX) const
+	{
+		bool isInsideX = checkX >= block.x && checkX < block.x + block.width;
+		bool isOnTop = Bottom() == block.y;
+		return isInsideX && isOnTop;
+	}
+
+	bool HasGroundAhead(const std::vector<Block> &blocks) const
+	{
+		int frontFootX = moveSpeed > 0 ? Right() : Left() - 1;
+		for (const Block &block : blocks)
 		{
-			x += moveSpeed; // 敵が右に移動する例
-			if (x > 800) // 画面外に出たら左に戻る
+			if (IsStandingOnBlock(block, frontFootX))
 			{
-				x = -width;
+				return true;
 			}
+		}
+		return false;
+	}
+
+	bool WillHitWall(const std::vector<Block> &blocks, int nextX) const
+	{
+		for (const Block &block : blocks)
+		{
+			bool isOverlapX = nextX < block.x + block.width && nextX + width > block.x;
+			bool isOverlapY = Bottom() > block.y && Top() < block.y + block.height;
+			if (isOverlapX && isOverlapY)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+public:
+	void Update(const std::vector<Block> &blocks)
+	{
+		// 非アクティブなら動かさない、typeがEnemyじゃないなら動きません。
+		if (!isActive || myType != Enemy)
+		{
+			return;
+		}
+
+		// 次のX座標を予測します！
+		int nextX = x + moveSpeed;
+
+		// 壁に当たるか地面がないなら反転します！
+		if (WillHitWall(blocks, nextX) || !HasGroundAhead(blocks))
+		{
+			moveSpeed *= -1;
+			nextX = x + moveSpeed;
+		}
+
+		// 次のX座標に壁がなければ移動します！
+		if (!WillHitWall(blocks, nextX))
+		{
+			x = nextX;
 		}
 	}
 };
@@ -408,6 +469,12 @@ private:
 public:
 	bool IsColliderInHazard(Hazard &hazard)
 	{
+		// hazardが非アクティブであることは少ないように見えますが、死んだ敵は非アクティブになるので、その敵に触れてもうっかり死なないようにするためのチェックです。
+		if (!hazard.isActive)
+		{
+			return false;
+		}
+
 		bool isOverlapX = Right() > hazard.Left() && Left() < hazard.Right();
 		bool isOverlapY = Bottom() > hazard.Top() && Top() < hazard.Bottom();
 		return isOverlapX && isOverlapY;
@@ -492,8 +559,7 @@ public:
 				if (stomped)
 				{
 					std::cout << "敵を踏んだ！" << std::endl;
-					hazard.x = -hazard.width;
-					hazard.y = 9999;
+					hazard.Remove();
 					Jump();
 					EventMediator::PlayerStumpEnemy();
 					continue;
@@ -542,12 +608,12 @@ StageData CreateStage(Player &player)
 
 	std::vector<std::string> stage = {
 		"........B.....",
-		"........B....C",
+		"........B.....",
 		".......B......",
 		".......B......",
 		"....B.........",
-		"..B.B......E..",
-		"GGGGGGGG..MMGG",
+		"..B.B......E.....................C",
+		"GGGGGGGG..MMGGGGGGG.G.G.GMMGGGGGGG",
 	};
 
 	int blockSize = 100;
@@ -746,7 +812,7 @@ int main()
 			hazard.Draw(renderer, camera);
 			if (currentScene == GameScene::Playing)
 			{
-				hazard.Update();
+				hazard.Update(stageData.blocks);
 			}
 		}
 		for (Goal &goal : stageData.goals)
