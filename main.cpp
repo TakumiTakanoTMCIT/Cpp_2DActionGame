@@ -98,6 +98,70 @@ public:
 	}
 };
 
+class Hazard
+{
+public:
+	enum Type
+	{
+		Enemy,
+		Magma,
+	};
+
+	int x = 0, y = 0;
+	int width = 100, height = 100;
+	Type myType;
+
+	Hazard(int x, int y, Type type) : x(x), y(y), myType(type) {}
+
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+	void Draw(SDL_Renderer *renderer, Camera &camera)
+	{
+		if (myType == Enemy)
+		{
+			SDL_SetRenderDrawColor(renderer, 220, 200, 40, 255);
+		}
+		else if (myType == Magma)
+		{
+			SDL_SetRenderDrawColor(renderer, 255, 90, 20, 255);
+		}
+
+		SDL_Rect rect_hazard = {x - camera.x, y - camera.y, width, height};
+		SDL_RenderFillRect(renderer, &rect_hazard);
+	}
+};
+
+class Goal
+{
+public:
+	int x = 0, y = 0;
+	int width = 100, height = 100;
+
+	Goal(int x, int y) : x(x), y(y) {}
+
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+	void Draw(SDL_Renderer *renderer, Camera &camera)
+	{
+		SDL_SetRenderDrawColor(renderer, 80, 220, 255, 255);
+		SDL_Rect rect_goal = {x - camera.x, y - camera.y, width, height};
+		SDL_RenderFillRect(renderer, &rect_goal);
+	}
+};
+
+struct StageData
+{
+	std::vector<Block> blocks;
+	std::vector<Hazard> hazards;
+	std::vector<Goal> goals;
+};
+
 class Player
 {
 public:
@@ -109,6 +173,8 @@ public:
 	float gravity = 0.5f;
 	float maxFallSpeed = 12.0f;
 	bool isGround = false;
+	bool isDead = false;
+	bool isGoal = false;
 	int visualPixotX, visualPixotY;
 	SDL_Texture *texture = nullptr;
 
@@ -169,6 +235,8 @@ public:
 		y = startY;
 		yVelocity = 0.0f;
 		isGround = false;
+		isDead = false;
+		isGoal = false;
 		visualPixotX = x + drawWidth / 2;
 		visualPixotY = y + drawHeight / 2;
 	}
@@ -190,8 +258,33 @@ private:
 	}
 
 public:
-	void Update(InputManager &inputManager, std::vector<Block> &blocks)
+	bool IsColliderInHazard(Hazard &hazard)
 	{
+		bool isOverlapX = Right() > hazard.Left() && Left() < hazard.Right();
+		bool isOverlapY = Bottom() > hazard.Top() && Top() < hazard.Bottom();
+		return isOverlapX && isOverlapY;
+	}
+
+	bool IsColliderInGoal(Goal &goal)
+	{
+		bool isOverlapX = Right() > goal.Left() && Left() < goal.Right();
+		bool isOverlapY = Bottom() > goal.Top() && Top() < goal.Bottom();
+		return isOverlapX && isOverlapY;
+	}
+
+public:
+	void Update(InputManager &inputManager, std::vector<Block> &blocks, StageData &stageData, int fallResetY)
+	{
+		isDead = y > fallResetY;
+		isGoal = false;
+		for (Hazard &hazard : stageData.hazards)
+		{
+			if (IsColliderInHazard(hazard))
+			{
+				isDead = true;
+			}
+		}
+
 		bool wasGround = isGround;
 		isGround = false;
 
@@ -241,6 +334,14 @@ public:
 			}
 		}
 
+		for (Goal &goal : stageData.goals)
+		{
+			if (IsColliderInGoal(goal))
+			{
+				isGoal = true;
+			}
+		}
+
 		visualPixotX = x + drawWidth / 2; // プレイヤー画像の中心のX座標を更新
 		visualPixotY = y + drawHeight / 2; // プレイヤー画像の中心のY座標を更新
 	}
@@ -276,18 +377,18 @@ public:
 	}
 };
 
-std::vector<Block> CreateStage(Player &player)
+StageData CreateStage(Player &player)
 {
-	std::vector<Block> blocks;
+	StageData stageData;
 
 	std::vector<std::string> stage = {
-		"........B.",
-		"........B.",
-		".......B..",
-		".......B..",
-		"....B.....",
-		"..B.B.....",
-		"GGGGGGGGGG",
+		"........B.....",
+		"........B....C",
+		".......B...E..",
+		".......B......",
+		"....B.........",
+		"..B.B.........",
+		"GGGGGGGG..MMGG",
 	};
 
 	int blockSize = 100;
@@ -302,16 +403,28 @@ std::vector<Block> CreateStage(Player &player)
 
 			if (tile == 'G')
 			{
-				blocks.emplace_back(x, y, Block::Ground);
+				stageData.blocks.emplace_back(x, y, Block::Ground);
 			}
 			else if (tile == 'B')
 			{
-				blocks.emplace_back(x, y, Block::Brick);
+				stageData.blocks.emplace_back(x, y, Block::Brick);
+			}
+			else if (tile == 'E')
+			{
+				stageData.hazards.emplace_back(x, y, Hazard::Enemy);
+			}
+			else if (tile == 'M')
+			{
+				stageData.hazards.emplace_back(x, y, Hazard::Magma);
+			}
+			else if (tile == 'C')
+			{
+				stageData.goals.emplace_back(x, y);
 			}
 		}
 	}
 
-	return blocks;
+	return stageData;
 }
 
 int main()
@@ -370,7 +483,7 @@ int main()
 	Player player;
 	Camera camera;
 	BackGround backGround;
-	std::vector<Block> blocks = CreateStage(player);
+	StageData stageData = CreateStage(player);
 	camera.Start(screenWidth, screenHeight);
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
 	player.Reset(playerStartX, playerStartY);
@@ -386,20 +499,34 @@ int main()
 		}
 		backGround.Draw(renderer);
 
-		player.Update(inputManager, blocks);
+		player.Update(inputManager, stageData.blocks, stageData, fallResetY);
 		camera.Update(player.visualPixotX, player.visualPixotY);
 
-		if (player.y > fallResetY)
-		{
-			player.Reset(playerStartX, playerStartY);
-			camera.Start(screenWidth, screenHeight);
-		}
+			if (player.isDead)
+			{
+				std::cout << "死んだ！" << std::endl;
+				player.Reset(playerStartX, playerStartY);
+				camera.Start(screenWidth, screenHeight);
+			}
+			else if (player.isGoal)
+			{
+				std::cout << "Goal!" << std::endl;
+				running = false;
+			}
 
-		player.Draw(renderer, camera);
-		for (Block &block : blocks)
-		{
-			block.Draw(renderer, camera);
+			player.Draw(renderer, camera);
+			for (Block &block : stageData.blocks)
+			{
+				block.Draw(renderer, camera);
 		}
+			for (Hazard &hazard : stageData.hazards)
+			{
+				hazard.Draw(renderer, camera);
+			}
+			for (Goal &goal : stageData.goals)
+			{
+				goal.Draw(renderer, camera);
+			}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
 		SDL_Delay(16); // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
