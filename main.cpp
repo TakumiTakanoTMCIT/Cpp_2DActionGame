@@ -1,6 +1,8 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 class InputManager
@@ -99,15 +101,52 @@ public:
 class Player
 {
 public:
-	int r = 255, g = 80, b = 80; // 四角形の色
-	int x = 300, y = 0; // 四角形の位置
-	int width = 200, height = 120; // 四角形のサイズ
+	int x = 300, y = 0; // プレイヤー画像の左上の位置
+	int drawWidth, drawHeight;
+	int colliderWidth, colliderHeight;
 	int speed = 10;
 	float yVelocity = 0.0f;
 	float gravity = 0.5f;
 	float maxFallSpeed = 12.0f;
 	bool isGround = false;
 	int visualPixotX, visualPixotY;
+	SDL_Texture *texture = nullptr;
+
+public:
+	bool LoadTexture(SDL_Renderer *renderer, const std::string &filePath, int scale)
+	{
+		SDL_Surface *surface = IMG_Load(filePath.c_str()); // filepathのデータを読み込んでいます。
+		if (surface == nullptr) // ↑で失敗したらnullptrが返ってくるのでここでnullチェックしてます
+		{
+			std::cout << "Player sprite load error: " << IMG_GetError() << std::endl;
+			return false;
+		}
+
+		texture = SDL_CreateTextureFromSurface(renderer, surface); // surfaceは使いにくい？のでtextureに変換します。↓でまたnullチェックしています。
+		if (texture == nullptr)
+		{
+			std::cout << "Player texture create error: " << SDL_GetError() << std::endl;
+			SDL_FreeSurface(surface); // 変換に失敗したときにメモリに残さないでsurfaceを解放します。複雑に見えますがただのエラー時の処理なので定型文として覚えましょう。
+			return false;
+		}
+
+		// draw系は手を加えてはいけません、なぜならscale倍だけサイズを変えたいので変に数値をいじると縦長になったり平べったくなるので、当たり判定を変えるときにはcollider系をいじってください。
+		drawWidth = surface->w * scale; // scaleが急に出てきますが、これは引数です。関数実行時にscaleに値を与えるとその倍率のサイズに変更します。高解像度のドット絵を入れるときに便利です。
+		drawHeight = surface->h * scale;
+		colliderWidth = drawWidth / 8; // 当たり判定は見た目より細くして、端の余白に引っかかりにくくしています。
+		colliderHeight = drawHeight * 3 / 4; // 足元は合わせつつ、頭の上の余白は少し無視するイメージです。
+		SDL_FreeSurface(surface); // ↑のエラー時と同じメソッドですが、この時点で変換が完了したのでsurfaceを解放しましょう。
+		return true;
+	}
+
+	void UnloadTexture() // Surfaceで作ったデータなどは自動で消えることはないので自前の関数で後処理を行います。main関数の最後の処理として実行します。これも癖強ポイントですが、定型文として覚えてください。
+	{
+		if (texture != nullptr)
+		{
+			SDL_DestroyTexture(texture);
+			texture = nullptr;
+		}
+	}
 
 private:
 	void Jump()
@@ -118,16 +157,29 @@ private:
 private:
 	void StayThisGround(int groundY)
 	{
-		y = groundY - height; // プレイヤーの下端が地面に接するように位置を調整
+		y = groundY - ColliderOffsetY() - colliderHeight; // 足元が地面にぴったり乗るように画像全体の位置を戻します。
 		yVelocity = 0.0f;
 		isGround = true;
 	}
 
 public:
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
+	void Reset(int startX, int startY)
+	{
+		x = startX;
+		y = startY;
+		yVelocity = 0.0f;
+		isGround = false;
+		visualPixotX = x + drawWidth / 2;
+		visualPixotY = y + drawHeight / 2;
+	}
+
+	int ColliderOffsetX() { return (drawWidth - colliderWidth) / 2; }
+	int ColliderOffsetY() { return drawHeight - colliderHeight; }
+
+	int Left() { return x + ColliderOffsetX(); }
+	int Right() { return Left() + colliderWidth; }
+	int Top() { return y + ColliderOffsetY(); }
+	int Bottom() { return Top() + colliderHeight; }
 
 private:
 	bool IsColliderInBlock(Block &block)
@@ -182,29 +234,35 @@ public:
 			{
 				y = previousY;
 				yVelocity = 0.0f;
-				if (previousY + height <= block.Top())
+				if (previousY + ColliderOffsetY() + colliderHeight <= block.Top())
 				{
 					isGround = true;
 				}
 			}
 		}
 
-		/*
-		if (y + height > groundY)
-		{
-			StayThisGround(groundY);
-		}*/
-
-		visualPixotX = x + width / 2; // プレイヤーの中心のX座標を更新
-		visualPixotY = y + height / 2; // プレイヤーの中心のY座標を更新
+		visualPixotX = x + drawWidth / 2; // プレイヤー画像の中心のX座標を更新
+		visualPixotY = y + drawHeight / 2; // プレイヤー画像の中心のY座標を更新
 	}
 
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_player = {x - camera.x, y - camera.y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
-		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_RenderFillRect(renderer, &rect_player); // rectを描くんだ〜！Fillだからまだわかりやすいかな？
+		SDL_Rect rect_player = {
+			x - camera.x,
+			y - camera.y,
+			drawWidth,
+			drawHeight};
+		if (texture != nullptr) // 一応nullチェックしています。
+		{
+			SDL_RenderCopy(renderer, texture, nullptr, &rect_player); // この関数がtextureを描画する本体です。rectplayerの位置とサイズで描画します。
+			return;
+		}
+
+		// これらの処理は実行されないように見えますよね？なぜ記述したのかと言うと、もしtextureの読み込みに失敗したらプレイヤーが透明になるので一応短形を描画しています。
+		SDL_SetRenderDrawColor(renderer, 255, 80, 80, 255);
+		SDL_RenderFillRect(renderer, &rect_player);
+		std::cout << "<Player,Draw>textureがnullです。";
 	}
 };
 
@@ -226,7 +284,7 @@ std::vector<Block> CreateStage(Player &player)
 		"........B.",
 		"........B.",
 		".......B..",
-		"..........",
+		".......B..",
 		"....B.....",
 		"..B.B.....",
 		"GGGGGGGGGG",
@@ -259,10 +317,20 @@ std::vector<Block> CreateStage(Player &player)
 int main()
 {
 	int screenWidth = 1200, screenHeight = 800;
+	const int playerStartX = 300;
+	const int playerStartY = 0;
+	const int fallResetY = screenHeight + 400;
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
+		return 1;
+	}
+
+	if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0) // つまり正しくpngが使えるかのチェックです。定型文です。
+	{
+		std::cout << "SDL_image Init Error: " << IMG_GetError() << std::endl;
+		SDL_Quit();
 		return 1;
 	}
 
@@ -276,6 +344,7 @@ int main()
 	if (window == nullptr)
 	{
 		std::cout << "Window Error: " << SDL_GetError() << std::endl;
+		IMG_Quit();
 		SDL_Quit();
 		return 1;
 	}
@@ -286,9 +355,13 @@ int main()
 	{
 		std::cout << "Renderer Error: " << SDL_GetError() << std::endl;
 		SDL_DestroyWindow(window);
+		IMG_Quit();
 		SDL_Quit();
 		return 1;
 	}
+
+	// ドット絵ゲームなら必須の設定です。ぼやけないで表示する定型文。
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
 	bool running = true;
 	SDL_Event event;
@@ -299,6 +372,8 @@ int main()
 	BackGround backGround;
 	std::vector<Block> blocks = CreateStage(player);
 	camera.Start(screenWidth, screenHeight);
+	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
+	player.Reset(playerStartX, playerStartY);
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -314,6 +389,12 @@ int main()
 		player.Update(inputManager, blocks);
 		camera.Update(player.visualPixotX, player.visualPixotY);
 
+		if (player.y > fallResetY)
+		{
+			player.Reset(playerStartX, playerStartY);
+			camera.Start(screenWidth, screenHeight);
+		}
+
 		player.Draw(renderer, camera);
 		for (Block &block : blocks)
 		{
@@ -324,8 +405,10 @@ int main()
 		SDL_Delay(16); // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
 	}
 
+	player.UnloadTexture();
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
+	IMG_Quit();
 	SDL_Quit();
 	return 0;
 }
