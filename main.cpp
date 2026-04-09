@@ -60,7 +60,7 @@ class Block
 {
 public:
 	int x = 500, y = 450;
-	int width = 100, height = 100;
+	int width = 200, height = 25;
 
 public:
 	int Left() { return x; }
@@ -68,7 +68,7 @@ public:
 	int Top() { return y; }
 	int Bottom() { return y + height; }
 
-	Block(int x, int y, int width, int height) : x(x), y(y), width(width), height(height) {}
+	Block(int x, int y) : x(x), y(y) {}
 
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
@@ -258,9 +258,9 @@ int main()
 	Ground ground;
 	BackGround backGround;
 	std::vector<Block> blocks = {
-		{100, 500, 200, 20},
-		{400, 400, 200, 20},
-		{100, 300, 200, 20},
+		{100, 500},
+		{400, 400},
+		{100, 300},
 	};
 
 	camera.Start(screenWidth, screenHeight);
