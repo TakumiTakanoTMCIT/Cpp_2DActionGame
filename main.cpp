@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 #include <SDL2/SDL_ttf.h>
 #include <cstdlib>
 #include <functional>
@@ -22,6 +23,61 @@ public:
 	}
 };
 std::function<void()> EventMediator::onPlayerStumpEnemy = nullptr;
+
+class SoundManager
+{
+private:
+	Mix_Chunk *uiConfirmSE = nullptr; // SEのファイルはここに入ります
+
+public:
+	// 初期化が上手くいったらtrueが帰ります。
+	bool Init()
+	{
+		if ((Mix_Init(MIX_INIT_MP3) & MIX_INIT_MP3) == 0)
+		{
+			std::cout << "Mix_Init Error: " << Mix_GetError() << std::endl;
+			return false;
+		}
+
+		if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+		{
+			std::cout << "Mix_OpenAudio Error: " << Mix_GetError() << std::endl;
+			Mix_Quit();
+			return false;
+		}
+
+		uiConfirmSE = Mix_LoadWAV("assets/決定ボタンを押す1.mp3");
+		if (uiConfirmSE == nullptr)
+		{
+			std::cout << "Sound Load Error: " << Mix_GetError() << std::endl;
+			Mix_CloseAudio();
+			Mix_Quit();
+			return false;
+		}
+
+		return true;
+	}
+
+	void Shutdown()
+	{
+		if (uiConfirmSE != nullptr)
+		{
+			Mix_FreeChunk(uiConfirmSE);
+			uiConfirmSE = nullptr;
+		}
+
+		Mix_CloseAudio();
+		Mix_Quit();
+	}
+
+	void PlayUiConfirm()
+	{
+		if (uiConfirmSE != nullptr)
+		{
+			Mix_PlayChannel(-1, uiConfirmSE, 0);
+		}
+	}
+};
 
 class InputManager
 {
@@ -365,17 +421,6 @@ public:
 	}
 
 public:
-	void Start()
-	{
-		EventMediator::onPlayerStumpEnemy = [this]()
-		{
-			std::cout << "プレイヤーが敵を踏んだときの処理！" << std::endl;
-			Jump();
-			// ここに敵を踏んだときの処理を追加できます。例えばスコアを増やすとか、特定のアイテムを出現させるとか、色々できます。
-		};
-	}
-
-public:
 	void Update(InputManager &inputManager, std::vector<Block> &blocks, StageData &stageData, int fallResetY)
 	{
 		isDead = y > fallResetY;
@@ -449,6 +494,7 @@ public:
 					std::cout << "敵を踏んだ！" << std::endl;
 					hazard.x = -hazard.width;
 					hazard.y = 9999;
+					Jump();
 					EventMediator::PlayerStumpEnemy();
 					continue;
 				}
@@ -547,7 +593,7 @@ int main()
 	const int playerStartY = 0;
 	const int fallResetY = screenHeight + 400;
 
-	if (SDL_Init(SDL_INIT_VIDEO) != 0)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
 	{
 		std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
 		return 1;
@@ -596,6 +642,13 @@ int main()
 	// ドット絵ゲームなら必須の設定です。ぼやけないで表示する定型文。
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 
+	SoundManager soundManager;
+	bool hasAudio = soundManager.Init();
+	if (!hasAudio)
+	{
+		std::cout << "音はなしで続行するよ！" << std::endl;
+	}
+
 	// フォントのロード
 	TTF_Font *font = TTF_OpenFont("assets/BestTen-CRT.otf", 32);
 	if (font == nullptr)
@@ -614,9 +667,13 @@ int main()
 	StageData stageData = CreateStage(player);
 	GameScene currentScene = GameScene::Title;
 	camera.Start(screenWidth, screenHeight);
-	player.Start();
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
 	player.Reset(playerStartX, playerStartY);
+	EventMediator::onPlayerStumpEnemy = [&soundManager]() {};
+	auto playUiConfirm = [&soundManager]()
+	{
+		soundManager.PlayUiConfirm();
+	};
 	SDL_SetWindowTitle(window, "My Game - Press Space or Enter to Start");
 	std::cout << "タイトル画面: Space か Enter でスタート" << std::endl;
 
@@ -632,6 +689,7 @@ int main()
 			if (currentScene == GameScene::Title &&
 				inputManager.isKeyPressed(SDLK_SPACE, event))
 			{
+				playUiConfirm();
 				currentScene = GameScene::Playing;
 				SDL_SetWindowTitle(window, "My Game");
 				std::cout << "ゲームスタート！" << std::endl;
@@ -639,6 +697,7 @@ int main()
 			if (currentScene == GameScene::Title &&
 				inputManager.isKeyPressed(SDLK_RETURN, event))
 			{
+				playUiConfirm();
 				currentScene = GameScene::Playing;
 				SDL_SetWindowTitle(window, "My Game");
 				std::cout << "ゲームスタート！" << std::endl;
@@ -646,11 +705,13 @@ int main()
 			if (currentScene == GameScene::Clear &&
 				inputManager.isKeyPressed(SDLK_SPACE, event))
 			{
+				playUiConfirm();
 				running = false;
 			}
 			if (currentScene == GameScene::Clear &&
 				inputManager.isKeyPressed(SDLK_RETURN, event))
 			{
+				playUiConfirm();
 				running = false;
 			}
 		}
@@ -706,6 +767,7 @@ int main()
 	}
 
 	player.UnloadTexture();
+	soundManager.Shutdown();
 	if (font != nullptr)
 	{
 		TTF_CloseFont(font);
