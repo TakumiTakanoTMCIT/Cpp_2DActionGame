@@ -1,9 +1,26 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
+
+class EventMediator
+{
+public:
+	static std::function<void()> onPlayerStumpEnemy;
+
+public:
+	static void PlayerStumpEnemy()
+	{
+		if (onPlayerStumpEnemy)
+		{
+			onPlayerStumpEnemy();
+		}
+	}
+};
+std::function<void()> EventMediator::onPlayerStumpEnemy = nullptr;
 
 class InputManager
 {
@@ -98,6 +115,27 @@ public:
 	}
 };
 
+class Goal
+{
+public:
+	int x = 0, y = 0;
+	int width = 100, height = 100;
+
+	Goal(int x, int y) : x(x), y(y) {}
+
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+	void Draw(SDL_Renderer *renderer, Camera &camera)
+	{
+		SDL_SetRenderDrawColor(renderer, 80, 220, 255, 255);
+		SDL_Rect rect_goal = {x - camera.x, y - camera.y, width, height};
+		SDL_RenderFillRect(renderer, &rect_goal);
+	}
+};
+
 class Hazard
 {
 public:
@@ -107,6 +145,7 @@ public:
 		Magma,
 	};
 
+	int moveSpeed = 2;
 	int x = 0, y = 0;
 	int width = 100, height = 100;
 	Type myType;
@@ -138,7 +177,7 @@ public:
 	{
 		if (myType == Enemy)
 		{
-			x += 5; // 敵が右に移動する例
+			x += moveSpeed; // 敵が右に移動する例
 			if (x > 800) // 画面外に出たら左に戻る
 			{
 				x = -width;
@@ -147,32 +186,21 @@ public:
 	}
 };
 
-class Goal
-{
-public:
-	int x = 0, y = 0;
-	int width = 100, height = 100;
-
-	Goal(int x, int y) : x(x), y(y) {}
-
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
-
-	void Draw(SDL_Renderer *renderer, Camera &camera)
-	{
-		SDL_SetRenderDrawColor(renderer, 80, 220, 255, 255);
-		SDL_Rect rect_goal = {x - camera.x, y - camera.y, width, height};
-		SDL_RenderFillRect(renderer, &rect_goal);
-	}
-};
-
 struct StageData
 {
 	std::vector<Block> blocks;
 	std::vector<Hazard> hazards;
 	std::vector<Goal> goals;
+};
+
+class BackGround
+{
+public:
+	void Draw(SDL_Renderer *renderer)
+	{
+		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
+		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
+	}
 };
 
 class Player
@@ -286,17 +314,21 @@ public:
 	}
 
 public:
+	void Start()
+	{
+		EventMediator::onPlayerStumpEnemy = [this]()
+		{
+			std::cout << "プレイヤーが敵を踏んだときの処理！" << std::endl;
+			Jump();
+			// ここに敵を踏んだときの処理を追加できます。例えばスコアを増やすとか、特定のアイテムを出現させるとか、色々できます。
+		};
+	}
+
+public:
 	void Update(InputManager &inputManager, std::vector<Block> &blocks, StageData &stageData, int fallResetY)
 	{
 		isDead = y > fallResetY;
 		isGoal = false;
-		for (Hazard &hazard : stageData.hazards)
-		{
-			if (IsColliderInHazard(hazard))
-			{
-				isDead = true;
-			}
-		}
 
 		bool wasGround = isGround;
 		isGround = false;
@@ -332,6 +364,7 @@ public:
 		}
 
 		int previousY = y;
+		int previousBottom = Bottom();
 		y += static_cast<int>(yVelocity);
 
 		for (Block &block : blocks)
@@ -345,6 +378,32 @@ public:
 					isGround = true;
 				}
 			}
+		}
+
+		for (Hazard &hazard : stageData.hazards)
+		{
+			if (!IsColliderInHazard(hazard))
+			{
+				continue;
+			}
+
+			if (hazard.myType == Hazard::Enemy)
+			{
+				bool stomped = previousBottom <= hazard.Top() &&
+					Bottom() >= hazard.Top() &&
+					yVelocity > 0.0f;
+
+				if (stomped)
+				{
+					std::cout << "敵を踏んだ！" << std::endl;
+					hazard.x = -hazard.width;
+					hazard.y = 9999;
+					EventMediator::PlayerStumpEnemy();
+					continue;
+				}
+			}
+
+			isDead = true;
 		}
 
 		for (Goal &goal : stageData.goals)
@@ -380,16 +439,6 @@ public:
 	}
 };
 
-class BackGround
-{
-public:
-	void Draw(SDL_Renderer *renderer)
-	{
-		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
-		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
-	}
-};
-
 StageData CreateStage(Player &player)
 {
 	StageData stageData;
@@ -397,10 +446,10 @@ StageData CreateStage(Player &player)
 	std::vector<std::string> stage = {
 		"........B.....",
 		"........B....C",
-		".......B...E..",
+		".......B......",
 		".......B......",
 		"....B.........",
-		"..B.B.........",
+		"..B.B......E..",
 		"GGGGGGGG..MMGG",
 	};
 
@@ -498,6 +547,7 @@ int main()
 	BackGround backGround;
 	StageData stageData = CreateStage(player);
 	camera.Start(screenWidth, screenHeight);
+	player.Start();
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
 	player.Reset(playerStartX, playerStartY);
 
