@@ -4,8 +4,6 @@
 
 #include <iostream>
 
-namespace
-{
 bool InitSDLSystems()
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -78,7 +76,6 @@ void LoadStageForGame(GameState &gameState)
 	gameState.player.Reset(stageContext.playerStartX, stageContext.playerStartY);
 	gameState.camera.Start(gameState.screenWidth, gameState.screenHeight);
 }
-} // namespace
 
 bool InputManager::IsKeyPressed(SDL_Keycode key, SDL_Event &event) const
 {
@@ -231,6 +228,14 @@ void UpdateGame(AppResources &resources, GameState &gameState)
 	gameState.player.Update(gameState.stageData, gameState.fallResetY);
 	gameState.camera.Update(gameState.player.visualPixotX, gameState.player.visualPixotY);
 
+	for (Hazard &hazard : gameState.stageData.hazards)
+	{
+		if (gameState.currentScene == GameScene::Playing)
+		{
+			hazard.Update(gameState.stageData.blocks);
+		}
+	}
+
 	if (gameState.player.isDead)
 	{
 		std::cout << "死んだ！" << std::endl;
@@ -266,10 +271,6 @@ void RenderGame(AppResources &resources, GameState &gameState)
 	for (Hazard &hazard : gameState.stageData.hazards)
 	{
 		hazard.Draw(resources.renderer, gameState.camera.x, gameState.camera.y);
-		if (gameState.currentScene == GameScene::Playing)
-		{
-			hazard.Update(gameState.stageData.blocks);
-		}
 	}
 
 	for (Goal &goal : gameState.stageData.goals)
