@@ -133,6 +133,12 @@ g++ main.cpp App.cpp SoundManager.cpp Stage.cpp Player.cpp -std=c++17 -I/opt/hom
 
 そのため、単に「動けばいい」ではなく、今後の拡張や保守もしやすい形を目指しています。
 
+
+## お借りした素材一覧
+- フォント:ベストテン
+- 効果音:効果音ラボ
+- ドット絵は自作しました
+
 ## 作者
 
 Takumi Takano
