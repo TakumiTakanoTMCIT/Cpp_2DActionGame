@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -212,12 +213,37 @@ public:
 class TitleScreen
 {
 public:
-	void Draw(SDL_Renderer *renderer, int screenWidth, int screenHeight)
+	void Draw(SDL_Renderer *renderer, int screenWidth, int screenHeight, TTF_Font *font)
 	{
 		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 		SDL_SetRenderDrawColor(renderer, 192, 205, 202, 100);
 		SDL_Rect overlay = {0, 0, screenWidth, screenHeight};
 		SDL_RenderFillRect(renderer, &overlay);
+
+		SDL_Color white = {255, 255, 255, 255};
+
+		SDL_Surface *textSurface = TTF_RenderUTF8_Blended(font, "PRESS SPACE TO START", white);
+		if (textSurface == nullptr) // ↑が失敗したときのためにnullチェック
+		{
+			std::cout << "Text Surface Error: " << TTF_GetError() << std::endl;
+		}
+		else
+		{
+			SDL_Texture *textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+			if (textTexture == nullptr) // 変換が失敗したときのためにnullチェック
+			{
+				std::cout << "Text Texture Error: " << SDL_GetError() << std::endl;
+				return;
+			}
+			else
+			{
+				SDL_Rect dstRect = {screenWidth / 2 - textSurface->w / 2, screenHeight / 2 - textSurface->h / 2, textSurface->w, textSurface->h};
+				SDL_RenderCopy(renderer, textTexture, nullptr, &dstRect);
+				SDL_DestroyTexture(textTexture);
+			}
+
+			SDL_FreeSurface(textSurface);
+		}
 	}
 };
 
@@ -527,6 +553,14 @@ int main()
 		return 1;
 	}
 
+	if (TTF_Init() == -1)
+	{
+		std::cout << "SDL_ttf Init Error: " << TTF_GetError() << std::endl;
+		IMG_Quit();
+		SDL_Quit();
+		return 1;
+	}
+
 	SDL_Window *window =
 		SDL_CreateWindow("My Game", // 名前
 						 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -542,8 +576,7 @@ int main()
 		return 1;
 	}
 
-	SDL_Renderer *renderer =
-		SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	if (renderer == nullptr)
 	{
 		std::cout << "Renderer Error: " << SDL_GetError() << std::endl;
@@ -555,6 +588,13 @@ int main()
 
 	// ドット絵ゲームなら必須の設定です。ぼやけないで表示する定型文。
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+
+	// フォントのロード
+	TTF_Font *font = TTF_OpenFont("assets/BestTen-CRT.otf", 32);
+	if (font == nullptr)
+	{
+		std::cout << "Font Load Error: " << TTF_GetError() << std::endl;
+	}
 
 	bool running = true;
 	SDL_Event event;
@@ -636,7 +676,7 @@ int main()
 		}
 		if (currentScene == GameScene::Title)
 		{
-			titleScreen.Draw(renderer, screenWidth, screenHeight);
+			titleScreen.Draw(renderer, screenWidth, screenHeight, font);
 		}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
@@ -648,5 +688,6 @@ int main()
 	SDL_DestroyWindow(window);
 	IMG_Quit();
 	SDL_Quit();
+	TTF_Quit();
 	return 0;
 }
