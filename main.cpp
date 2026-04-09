@@ -8,6 +8,29 @@
 #include <string>
 #include <vector>
 
+int currentStageIndex = 0;
+
+const std::vector<std::vector<std::string>> kAllStages = {
+	{
+		"........B.....",
+		"........B.....",
+		".......B......",
+		".......B......",
+		"P...B.........",
+		"..B.B......E.....................C",
+		"GGGGGGGG..MMGGGGGGG.G.G.GMMGGGGGGG",
+	},
+	{
+		"..............",
+		"..............",
+		"..............",
+		"..............",
+		"P....G....GG..",
+		"....G......E.....................C",
+		"GGGGGMMM..MMGGM.GGG.G.G.GMMGGGGGGG",
+	},
+};
+
 class EventMediator
 {
 public:
@@ -311,6 +334,13 @@ struct StageData
 	std::vector<Goal> goals;
 };
 
+struct StageContext
+{
+	StageData stageData;
+	int playerStartX = 300;
+	int playerStartY = 0;
+};
+
 enum class GameScene
 {
 	Title,
@@ -602,19 +632,10 @@ public:
 	}
 };
 
-StageData CreateStage(Player &player)
+StageContext CreateStage(int stageIndex)
 {
-	StageData stageData;
-
-	std::vector<std::string> stage = {
-		"........B.....",
-		"........B.....",
-		".......B......",
-		".......B......",
-		"....B.........",
-		"..B.B......E.....................C",
-		"GGGGGGGG..MMGGGGGGG.G.G.GMMGGGGGGG",
-	};
+	StageContext stageContext;
+	const std::vector<std::string> &stage = kAllStages[stageIndex];
 
 	int blockSize = 100;
 
@@ -628,35 +649,47 @@ StageData CreateStage(Player &player)
 
 			if (tile == 'G')
 			{
-				stageData.blocks.emplace_back(x, y, Block::Ground);
+				stageContext.stageData.blocks.emplace_back(x, y, Block::Ground);
 			}
 			else if (tile == 'B')
 			{
-				stageData.blocks.emplace_back(x, y, Block::Brick);
+				stageContext.stageData.blocks.emplace_back(x, y, Block::Brick);
 			}
 			else if (tile == 'E')
 			{
-				stageData.hazards.emplace_back(x, y, Hazard::Enemy);
+				stageContext.stageData.hazards.emplace_back(x, y, Hazard::Enemy);
 			}
 			else if (tile == 'M')
 			{
-				stageData.hazards.emplace_back(x, y, Hazard::Magma);
+				stageContext.stageData.hazards.emplace_back(x, y, Hazard::Magma);
 			}
 			else if (tile == 'C')
 			{
-				stageData.goals.emplace_back(x, y);
+				stageContext.stageData.goals.emplace_back(x, y);
+			}
+			else if (tile == 'P')
+			{
+				stageContext.playerStartX = x;
+				stageContext.playerStartY = y;
 			}
 		}
 	}
 
-	return stageData;
+	return stageContext;
+}
+
+void LoadStage(int stageIndex, StageData &stageData, Player &player, Camera &camera, int screenWidth, int screenHeight)
+{
+	currentStageIndex = stageIndex;
+	StageContext stageContext = CreateStage(stageIndex);
+	stageData = stageContext.stageData;
+	player.Reset(stageContext.playerStartX, stageContext.playerStartY);
+	camera.Start(screenWidth, screenHeight);
 }
 
 int main()
 {
 	int screenWidth = 1200, screenHeight = 800;
-	const int playerStartX = 300;
-	const int playerStartY = 0;
 	const int fallResetY = screenHeight + 400;
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -730,11 +763,11 @@ int main()
 	Camera camera;
 	BackGround backGround;
 	TitleScreen titleScreen;
-	StageData stageData = CreateStage(player);
+	StageData stageData;
 	GameScene currentScene = GameScene::Title;
 	camera.Start(screenWidth, screenHeight);
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
-	player.Reset(playerStartX, playerStartY);
+	LoadStage(0, stageData, player, camera, screenWidth, screenHeight);
 	EventMediator::onPlayerStumpEnemy = [&soundManager]() {};
 	auto playUiConfirm = [&soundManager]()
 	{
@@ -791,14 +824,21 @@ int main()
 			if (player.isDead)
 			{
 				std::cout << "死んだ！" << std::endl;
-				player.Reset(playerStartX, playerStartY);
-				camera.Start(screenWidth, screenHeight);
+				LoadStage(currentStageIndex, stageData, player, camera, screenWidth, screenHeight);
 			}
 			else if (player.isGoal)
 			{
 				std::cout << "Goal!" << std::endl;
-				currentScene = GameScene::Clear;
-				SDL_SetWindowTitle(window, "My Game - Clear");
+				if (currentStageIndex + 1 < kAllStages.size())
+				{
+					LoadStage(currentStageIndex + 1, stageData, player, camera, screenWidth, screenHeight);
+					std::cout << "次のステージへ！" << std::endl;
+				}
+				else
+				{
+					currentScene = GameScene::Clear;
+					SDL_SetWindowTitle(window, "My Game - Clear");
+				}
 			}
 		}
 
