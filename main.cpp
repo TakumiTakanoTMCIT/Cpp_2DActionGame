@@ -8,29 +8,9 @@
 #include <vector>
 
 #include "SoundManager.h"
+#include "Stage.h"
 
 int currentStageIndex = 0;
-
-const std::vector<std::vector<std::string>> kAllStages = {
-	{
-		"........B.....",
-		"........B.....",
-		".......B......",
-		".......B......",
-		"P...B.........",
-		"..B.B......E.....................C",
-		"GGGGGGGG..MMGGGGGGG.G.G.GMMGGGGGGG",
-	},
-	{
-		"..............",
-		"..............",
-		"..............",
-		"..............",
-		"P....G....GG..",
-		"....G......E.....................C",
-		"GGGGGMMM..MMGGM.GGG.G.G.GMMGGGGGGG",
-	},
-};
 
 class EventMediator
 {
@@ -99,192 +79,6 @@ public:
 			x = playerX - startX;
 		}
 	}
-};
-
-class Block
-{
-public:
-	enum Type
-	{
-		Ground,
-		Brick,
-	};
-
-public:
-	int x = 500, y = 450;
-	int width = 100, height = 100;
-
-public:
-	int Left() const { return x; }
-	int Right() const { return x + width; }
-	int Top() const { return y; }
-	int Bottom() const { return y + height; }
-	Type myType;
-
-	// コンストラクタ
-	Block(int x, int y, Type type) : x(x), y(y), myType(type) {}
-
-public:
-	void Draw(SDL_Renderer *renderer, Camera &camera)
-	{
-		if (myType == Ground)
-		{
-			SDL_SetRenderDrawColor(renderer, 80, 160, 80, 255); // 地面の色を緑色に設定
-		}
-		else if (myType == Brick)
-		{
-			SDL_SetRenderDrawColor(renderer, 160, 80, 80, 255); // ブロックの色を赤色に設定
-		}
-
-		SDL_Rect rect_block = {x - camera.x, y - camera.y, width, height};
-		SDL_RenderFillRect(renderer, &rect_block);
-	}
-};
-
-class Goal
-{
-public:
-	int x = 0, y = 0;
-	int width = 100, height = 100;
-
-	Goal(int x, int y) : x(x), y(y) {}
-
-	int Left() const { return x; }
-	int Right() const { return x + width; }
-	int Top() const { return y; }
-	int Bottom() const { return y + height; }
-
-	void Draw(SDL_Renderer *renderer, Camera &camera)
-	{
-		SDL_SetRenderDrawColor(renderer, 80, 220, 255, 255);
-		SDL_Rect rect_goal = {x - camera.x, y - camera.y, width, height};
-		SDL_RenderFillRect(renderer, &rect_goal);
-	}
-};
-
-class Hazard
-{
-public:
-	enum Type
-	{
-		Enemy,
-		Magma,
-	};
-
-	int moveSpeed = 2;
-	int x = 0, y = 0;
-	int width = 100, height = 100;
-	Type myType;
-	bool isActive = true;
-
-	Hazard(int x, int y, Type type) : x(x), y(y), myType(type) {}
-
-	int Left() const { return x; }
-	int Right() const { return x + width; }
-	int Top() const { return y; }
-	int Bottom() const { return y + height; }
-
-	void Draw(SDL_Renderer *renderer, Camera &camera)
-	{
-		// そもそもDrawを実行しなかったら見えないので非アクティブにするというのが直感的に理解できます！
-		if (!isActive)
-		{
-			return;
-		}
-
-		if (myType == Enemy)
-		{
-			SDL_SetRenderDrawColor(renderer, 220, 200, 40, 255);
-		}
-		else if (myType == Magma)
-		{
-			SDL_SetRenderDrawColor(renderer, 255, 90, 20, 255);
-		}
-
-		SDL_Rect rect_hazard = {x - camera.x, y - camera.y, width, height};
-		SDL_RenderFillRect(renderer, &rect_hazard);
-	}
-
-public:
-	void Remove()
-	{
-		isActive = false;
-	}
-
-private:
-	bool IsStandingOnBlock(const Block &block, int checkX) const
-	{
-		bool isInsideX = checkX >= block.x && checkX < block.x + block.width;
-		bool isOnTop = Bottom() == block.y;
-		return isInsideX && isOnTop;
-	}
-
-	bool HasGroundAhead(const std::vector<Block> &blocks) const
-	{
-		int frontFootX = moveSpeed > 0 ? Right() : Left() - 1;
-		for (const Block &block : blocks)
-		{
-			if (IsStandingOnBlock(block, frontFootX))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool WillHitWall(const std::vector<Block> &blocks, int nextX) const
-	{
-		for (const Block &block : blocks)
-		{
-			bool isOverlapX = nextX < block.x + block.width && nextX + width > block.x;
-			bool isOverlapY = Bottom() > block.y && Top() < block.y + block.height;
-			if (isOverlapX && isOverlapY)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-public:
-	void Update(const std::vector<Block> &blocks)
-	{
-		// 非アクティブなら動かさない、typeがEnemyじゃないなら動きません。
-		if (!isActive || myType != Enemy)
-		{
-			return;
-		}
-
-		// 次のX座標を予測します！
-		int nextX = x + moveSpeed;
-
-		// 壁に当たるか地面がないなら反転します！
-		if (WillHitWall(blocks, nextX) || !HasGroundAhead(blocks))
-		{
-			moveSpeed *= -1;
-			nextX = x + moveSpeed;
-		}
-
-		// 次のX座標に壁がなければ移動します！
-		if (!WillHitWall(blocks, nextX))
-		{
-			x = nextX;
-		}
-	}
-};
-
-struct StageData
-{
-	std::vector<Block> blocks;
-	std::vector<Hazard> hazards;
-	std::vector<Goal> goals;
-};
-
-struct StageContext
-{
-	StageData stageData;
-	int playerStartX = 300;
-	int playerStartY = 0;
 };
 
 enum class GameScene
@@ -578,52 +372,6 @@ public:
 	}
 };
 
-StageContext CreateStage(int stageIndex)
-{
-	StageContext stageContext;
-	const std::vector<std::string> &stage = kAllStages[stageIndex];
-
-	int blockSize = 100;
-
-	for (int row = 0; row < stage.size(); row++)
-	{
-		for (int col = 0; col < stage[row].size(); col++)
-		{
-			char tile = stage[row][col];
-			int x = col * blockSize;
-			int y = row * blockSize;
-
-			if (tile == 'G')
-			{
-				stageContext.stageData.blocks.emplace_back(x, y, Block::Ground);
-			}
-			else if (tile == 'B')
-			{
-				stageContext.stageData.blocks.emplace_back(x, y, Block::Brick);
-			}
-			else if (tile == 'E')
-			{
-				stageContext.stageData.hazards.emplace_back(x, y, Hazard::Enemy);
-			}
-			else if (tile == 'M')
-			{
-				stageContext.stageData.hazards.emplace_back(x, y, Hazard::Magma);
-			}
-			else if (tile == 'C')
-			{
-				stageContext.stageData.goals.emplace_back(x, y);
-			}
-			else if (tile == 'P')
-			{
-				stageContext.playerStartX = x;
-				stageContext.playerStartY = y;
-			}
-		}
-	}
-
-	return stageContext;
-}
-
 void LoadStage(int stageIndex, StageData &stageData, Player &player, Camera &camera, int screenWidth, int screenHeight)
 {
 	currentStageIndex = stageIndex;
@@ -774,9 +522,9 @@ int main()
 			}
 			else if (player.isGoal)
 			{
-				std::cout << "Goal!" << std::endl;
-				if (currentStageIndex + 1 < kAllStages.size())
-				{
+					std::cout << "Goal!" << std::endl;
+					if (currentStageIndex + 1 < GetStageCount())
+					{
 					LoadStage(currentStageIndex + 1, stageData, player, camera, screenWidth, screenHeight);
 					std::cout << "次のステージへ！" << std::endl;
 				}
@@ -791,11 +539,11 @@ int main()
 		player.Draw(renderer, camera);
 		for (Block &block : stageData.blocks)
 		{
-			block.Draw(renderer, camera);
+			block.Draw(renderer, camera.x, camera.y);
 		}
 		for (Hazard &hazard : stageData.hazards)
 		{
-			hazard.Draw(renderer, camera);
+			hazard.Draw(renderer, camera.x, camera.y);
 			if (currentScene == GameScene::Playing)
 			{
 				hazard.Update(stageData.blocks);
@@ -803,7 +551,7 @@ int main()
 		}
 		for (Goal &goal : stageData.goals)
 		{
-			goal.Draw(renderer, camera);
+			goal.Draw(renderer, camera.x, camera.y);
 		}
 		if (currentScene == GameScene::Title)
 		{
