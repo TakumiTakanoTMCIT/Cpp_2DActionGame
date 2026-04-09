@@ -59,22 +59,39 @@ public:
 class Block
 {
 public:
+	enum Type
+	{
+		Ground,
+		Brick,
+	};
+
+public:
 	int x = 500, y = 450;
-	int width = 200, height = 25;
+	int width = 100, height = 100;
 
 public:
 	int Left() { return x; }
 	int Right() { return x + width; }
 	int Top() { return y; }
 	int Bottom() { return y + height; }
+	Type myType;
 
-	Block(int x, int y) : x(x), y(y) {}
+	// コンストラクタ
+	Block(int x, int y, Type type) : x(x), y(y), myType(type) {}
 
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
+		if (myType == Ground)
+		{
+			SDL_SetRenderDrawColor(renderer, 80, 160, 80, 255); // 地面の色を緑色に設定
+		}
+		else if (myType == Brick)
+		{
+			SDL_SetRenderDrawColor(renderer, 160, 80, 80, 255); // ブロックの色を赤色に設定
+		}
+
 		SDL_Rect rect_block = {x - camera.x, y - camera.y, width, height};
-		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
 		SDL_RenderFillRect(renderer, &rect_block);
 	}
 };
@@ -121,7 +138,7 @@ private:
 	}
 
 public:
-	void Update(int groundY, InputManager &inputManager, std::vector<Block> &blocks)
+	void Update(InputManager &inputManager, std::vector<Block> &blocks)
 	{
 		bool wasGround = isGround;
 		isGround = false;
@@ -172,10 +189,11 @@ public:
 			}
 		}
 
+		/*
 		if (y + height > groundY)
 		{
 			StayThisGround(groundY);
-		}
+		}*/
 
 		visualPixotX = x + width / 2; // プレイヤーの中心のX座標を更新
 		visualPixotY = y + height / 2; // プレイヤーの中心のY座標を更新
@@ -200,20 +218,43 @@ public:
 	}
 };
 
-class Ground
+std::vector<Block> CreateStage(Player &player)
 {
-public:
-	int x = 0, y = 600; // 地面の位置
-	int width = 1200, height = 20; // 地面のサイズ
+	std::vector<Block> blocks;
 
-public:
-	void Draw(SDL_Renderer *renderer, Camera &camera)
+	std::vector<std::string> stage = {
+		"........B.",
+		"........B.",
+		".......B..",
+		"..........",
+		"....B.....",
+		"..B.B.....",
+		"GGGGGGGGGG",
+	};
+
+	int blockSize = 100;
+
+	for (int row = 0; row < stage.size(); row++)
 	{
-		SDL_Rect rect_ground = {x - camera.x, y - camera.y, width, height};
-		SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 地面の色を茶色に設定
-		SDL_RenderFillRect(renderer, &rect_ground); // 地面を描く感じだね。
+		for (int col = 0; col < stage[row].size(); col++)
+		{
+			char tile = stage[row][col];
+			int x = col * blockSize;
+			int y = row * blockSize;
+
+			if (tile == 'G')
+			{
+				blocks.emplace_back(x, y, Block::Ground);
+			}
+			else if (tile == 'B')
+			{
+				blocks.emplace_back(x, y, Block::Brick);
+			}
+		}
 	}
-};
+
+	return blocks;
+}
 
 int main()
 {
@@ -255,14 +296,8 @@ int main()
 	InputManager inputManager;
 	Player player;
 	Camera camera;
-	Ground ground;
 	BackGround backGround;
-	std::vector<Block> blocks = {
-		{100, 500},
-		{400, 400},
-		{100, 300},
-	};
-
+	std::vector<Block> blocks = CreateStage(player);
 	camera.Start(screenWidth, screenHeight);
 
 	while (running)
@@ -276,11 +311,10 @@ int main()
 		}
 		backGround.Draw(renderer);
 
-		player.Update(ground.y, inputManager, blocks);
+		player.Update(inputManager, blocks);
 		camera.Update(player.visualPixotX, player.visualPixotY);
 
 		player.Draw(renderer, camera);
-		ground.Draw(renderer, camera);
 		for (Block &block : blocks)
 		{
 			block.Draw(renderer, camera);
