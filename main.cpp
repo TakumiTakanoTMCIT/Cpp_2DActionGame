@@ -90,7 +90,7 @@ public:
 	float gravity = 0.5f;
 	float maxFallSpeed = 12.0f;
 	bool isGround = false;
-	int visualPixotX;
+	int visualPixotX, visualPixotY;
 
 private:
 	void Jump()
@@ -178,6 +178,7 @@ public:
 		}
 
 		visualPixotX = x + width / 2; // プレイヤーの中心のX座標を更新
+		visualPixotY = y + height / 2; // プレイヤーの中心のY座標を更新
 	}
 
 public:
@@ -276,7 +277,7 @@ int main()
 		backGround.Draw(renderer);
 
 		player.Update(ground.y, inputManager, blocks);
-		camera.Update(player.visualPixotX, player.y);
+		camera.Update(player.visualPixotX, player.visualPixotY);
 
 		player.Draw(renderer, camera);
 		ground.Draw(renderer, camera);
