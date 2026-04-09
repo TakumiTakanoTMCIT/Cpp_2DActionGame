@@ -23,6 +23,29 @@ public:
 	}
 };
 
+class Camera
+{
+public:
+	int x;
+	int startX;
+
+public:
+	void Start(int screenWidth)
+	{
+		x = 0;
+		startX = screenWidth / 2;
+	}
+
+public:
+	void Update(int playerX)
+	{
+		if (playerX > startX)
+		{
+			x = playerX - startX;
+		}
+	}
+};
+
 class Block
 {
 public:
@@ -38,9 +61,9 @@ public:
 	Block(int x, int y, int width, int height) : x(x), y(y), width(width), height(height) {}
 
 public:
-	void Draw(SDL_Renderer *renderer)
+	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_block = {x, y, width, height};
+		SDL_Rect rect_block = {x - camera.x, y, width, height};
 		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
 		SDL_RenderFillRect(renderer, &rect_block);
 	}
@@ -145,9 +168,9 @@ public:
 	}
 
 public:
-	void Draw(SDL_Renderer *renderer)
+	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_player = {x, y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
+		SDL_Rect rect_player = {x - camera.x, y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
 		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 		SDL_RenderFillRect(renderer, &rect_player); // rectを描くんだ〜！Fillだからまだわかりやすいかな？
 	}
@@ -170,9 +193,9 @@ public:
 	int width = 1200, height = 20; // 地面のサイズ
 
 public:
-	void Draw(SDL_Renderer *renderer)
+	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_ground = {x, y, width, height};
+		SDL_Rect rect_ground = {x - camera.x, y, width, height};
 		SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 地面の色を茶色に設定
 		SDL_RenderFillRect(renderer, &rect_ground); // 地面を描く感じだね。
 	}
@@ -180,6 +203,8 @@ public:
 
 int main()
 {
+	int screenWidth = 1200;
+
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
@@ -189,7 +214,7 @@ int main()
 	SDL_Window *window =
 		SDL_CreateWindow("My Game", // 名前
 						 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-						 1200, // 横
+						 screenWidth, // 横
 						 800, // 縦
 						 SDL_WINDOW_SHOWN);
 
@@ -215,7 +240,7 @@ int main()
 
 	InputManager inputManager;
 	Player player;
-
+	Camera camera;
 	Ground ground;
 	BackGround backGround;
 	std::vector<Block> blocks = {
@@ -223,6 +248,8 @@ int main()
 		{400, 400, 200, 20},
 		{700, 300, 200, 20},
 	};
+
+	camera.Start(screenWidth);
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -233,20 +260,19 @@ int main()
 				running = false;
 			}
 		}
-		backGround.Draw(
-			renderer); // 背景を描く感じだね。これも毎回描いてるからUpdate()的なやつだね。
+		backGround.Draw(renderer);
 
 		player.Update(ground.y, inputManager, blocks);
-		player.Draw(renderer);
+		camera.Update(player.x);
 
-		ground.Draw(renderer);
+		player.Draw(renderer, camera);
+		ground.Draw(renderer, camera);
 		for (Block &block : blocks)
 		{
-			block.Draw(renderer);
+			block.Draw(renderer, camera);
 		}
 
-		SDL_RenderPresent(
-			renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
+		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
 		SDL_Delay(16); // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
 	}
 
