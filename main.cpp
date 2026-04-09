@@ -101,9 +101,9 @@ public:
 class Player
 {
 public:
-	int x = 300, y = 0; // 四角形の位置
-	int width = 128;
-	int height = 128;
+	int x = 300, y = 0; // プレイヤー画像の左上の位置
+	int drawWidth, drawHeight;
+	int colliderWidth, colliderHeight;
 	int speed = 10;
 	float yVelocity = 0.0f;
 	float gravity = 0.5f;
@@ -130,8 +130,11 @@ public:
 			return false;
 		}
 
-		width = surface->w * scale; // scaleが急に出てきますが、これは引数です。関数実行時にscaleに値を与えるとその倍率のサイズに変更します。高解像度のドット絵を入れるときに便利です。
-		height = surface->h * scale;
+		// draw系は手を加えてはいけません、なぜならscale倍だけサイズを変えたいので変に数値をいじると縦長になったり平べったくなるので、当たり判定を変えるときにはcollider系をいじってください。
+		drawWidth = surface->w * scale; // scaleが急に出てきますが、これは引数です。関数実行時にscaleに値を与えるとその倍率のサイズに変更します。高解像度のドット絵を入れるときに便利です。
+		drawHeight = surface->h * scale;
+		colliderWidth = drawWidth / 8; // 当たり判定は見た目より細くして、端の余白に引っかかりにくくしています。
+		colliderHeight = drawHeight * 3 / 4; // 足元は合わせつつ、頭の上の余白は少し無視するイメージです。
 		SDL_FreeSurface(surface); // ↑のエラー時と同じメソッドですが、この時点で変換が完了したのでsurfaceを解放しましょう。
 		return true;
 	}
@@ -154,16 +157,29 @@ private:
 private:
 	void StayThisGround(int groundY)
 	{
-		y = groundY - height; // プレイヤーの下端が地面に接するように位置を調整
+		y = groundY - ColliderOffsetY() - colliderHeight; // 足元が地面にぴったり乗るように画像全体の位置を戻します。
 		yVelocity = 0.0f;
 		isGround = true;
 	}
 
 public:
-	int Left() { return x; }
-	int Right() { return x + width; }
-	int Top() { return y; }
-	int Bottom() { return y + height; }
+	void Reset(int startX, int startY)
+	{
+		x = startX;
+		y = startY;
+		yVelocity = 0.0f;
+		isGround = false;
+		visualPixotX = x + drawWidth / 2;
+		visualPixotY = y + drawHeight / 2;
+	}
+
+	int ColliderOffsetX() { return (drawWidth - colliderWidth) / 2; }
+	int ColliderOffsetY() { return drawHeight - colliderHeight; }
+
+	int Left() { return x + ColliderOffsetX(); }
+	int Right() { return Left() + colliderWidth; }
+	int Top() { return y + ColliderOffsetY(); }
+	int Bottom() { return Top() + colliderHeight; }
 
 private:
 	bool IsColliderInBlock(Block &block)
@@ -218,21 +234,25 @@ public:
 			{
 				y = previousY;
 				yVelocity = 0.0f;
-				if (previousY + height <= block.Top())
+				if (previousY + ColliderOffsetY() + colliderHeight <= block.Top())
 				{
 					isGround = true;
 				}
 			}
 		}
 
-		visualPixotX = x + width / 2; // プレイヤーの中心のX座標を更新
-		visualPixotY = y + height / 2; // プレイヤーの中心のY座標を更新
+		visualPixotX = x + drawWidth / 2; // プレイヤー画像の中心のX座標を更新
+		visualPixotY = y + drawHeight / 2; // プレイヤー画像の中心のY座標を更新
 	}
 
 public:
 	void Draw(SDL_Renderer *renderer, Camera &camera)
 	{
-		SDL_Rect rect_player = {x - camera.x, y - camera.y, width, height};
+		SDL_Rect rect_player = {
+			x - camera.x,
+			y - camera.y,
+			drawWidth,
+			drawHeight};
 		if (texture != nullptr) // 一応nullチェックしています。
 		{
 			SDL_RenderCopy(renderer, texture, nullptr, &rect_player); // この関数がtextureを描画する本体です。rectplayerの位置とサイズで描画します。
@@ -264,7 +284,7 @@ std::vector<Block> CreateStage(Player &player)
 		"........B.",
 		"........B.",
 		".......B..",
-		"..........",
+		".......B..",
 		"....B.....",
 		"..B.B.....",
 		"GGGGGGGGGG",
@@ -297,6 +317,9 @@ std::vector<Block> CreateStage(Player &player)
 int main()
 {
 	int screenWidth = 1200, screenHeight = 800;
+	const int playerStartX = 300;
+	const int playerStartY = 0;
+	const int fallResetY = screenHeight + 400;
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
@@ -350,6 +373,7 @@ int main()
 	std::vector<Block> blocks = CreateStage(player);
 	camera.Start(screenWidth, screenHeight);
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
+	player.Reset(playerStartX, playerStartY);
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -364,6 +388,12 @@ int main()
 
 		player.Update(inputManager, blocks);
 		camera.Update(player.visualPixotX, player.visualPixotY);
+
+		if (player.y > fallResetY)
+		{
+			player.Reset(playerStartX, playerStartY);
+			camera.Start(screenWidth, screenHeight);
+		}
 
 		player.Draw(renderer, camera);
 		for (Block &block : blocks)
