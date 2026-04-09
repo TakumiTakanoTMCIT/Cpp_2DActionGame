@@ -132,6 +132,19 @@ public:
 		SDL_Rect rect_hazard = {x - camera.x, y - camera.y, width, height};
 		SDL_RenderFillRect(renderer, &rect_hazard);
 	}
+
+public:
+	void Update()
+	{
+		if (myType == Enemy)
+		{
+			x += 5; // 敵が右に移動する例
+			if (x > 800) // 画面外に出たら左に戻る
+			{
+				x = -width;
+			}
+		}
+	}
 };
 
 class Goal
@@ -502,31 +515,32 @@ int main()
 		player.Update(inputManager, stageData.blocks, stageData, fallResetY);
 		camera.Update(player.visualPixotX, player.visualPixotY);
 
-			if (player.isDead)
-			{
-				std::cout << "死んだ！" << std::endl;
-				player.Reset(playerStartX, playerStartY);
-				camera.Start(screenWidth, screenHeight);
-			}
-			else if (player.isGoal)
-			{
-				std::cout << "Goal!" << std::endl;
-				running = false;
-			}
-
-			player.Draw(renderer, camera);
-			for (Block &block : stageData.blocks)
-			{
-				block.Draw(renderer, camera);
+		if (player.isDead)
+		{
+			std::cout << "死んだ！" << std::endl;
+			player.Reset(playerStartX, playerStartY);
+			camera.Start(screenWidth, screenHeight);
 		}
-			for (Hazard &hazard : stageData.hazards)
-			{
-				hazard.Draw(renderer, camera);
-			}
-			for (Goal &goal : stageData.goals)
-			{
-				goal.Draw(renderer, camera);
-			}
+		else if (player.isGoal)
+		{
+			std::cout << "Goal!" << std::endl;
+			running = false;
+		}
+
+		player.Draw(renderer, camera);
+		for (Block &block : stageData.blocks)
+		{
+			block.Draw(renderer, camera);
+		}
+		for (Hazard &hazard : stageData.hazards)
+		{
+			hazard.Draw(renderer, camera);
+			hazard.Update();
+		}
+		for (Goal &goal : stageData.goals)
+		{
+			goal.Draw(renderer, camera);
+		}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
 		SDL_Delay(16); // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
