@@ -235,22 +235,22 @@ public:
 		}
 		else
 		{
-				SDL_Texture *textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-				if (textTexture == nullptr) // 変換が失敗したときのためにnullチェック
-				{
-					std::cout << "Text Texture Error: " << SDL_GetError() << std::endl;
-					SDL_FreeSurface(textSurface);
-					return;
-				}
+			SDL_Texture *textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+			if (textTexture == nullptr) // 変換が失敗したときのためにnullチェック
+			{
+				std::cout << "Text Texture Error: " << SDL_GetError() << std::endl;
+				SDL_FreeSurface(textSurface);
+				return;
+			}
 			else
 			{
 				SDL_Rect dstRect = {screenWidth / 2 - textSurface->w / 2, screenHeight / 2 - textSurface->h / 2, textSurface->w, textSurface->h};
 				SDL_RenderCopy(renderer, textTexture, nullptr, &dstRect);
 				SDL_DestroyTexture(textTexture);
-				}
-
-				SDL_FreeSurface(textSurface);
 			}
+
+			SDL_FreeSurface(textSurface);
+		}
 	}
 };
 
@@ -629,31 +629,31 @@ int main()
 				running = false;
 			}
 
-				if (currentScene == GameScene::Title &&
-					inputManager.isKeyPressed(SDLK_SPACE, event))
-				{
-					currentScene = GameScene::Playing;
-					SDL_SetWindowTitle(window, "My Game");
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_SPACE, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
 				std::cout << "ゲームスタート！" << std::endl;
 			}
-				if (currentScene == GameScene::Title &&
-					inputManager.isKeyPressed(SDLK_RETURN, event))
-				{
-					currentScene = GameScene::Playing;
-					SDL_SetWindowTitle(window, "My Game");
-					std::cout << "ゲームスタート！" << std::endl;
-				}
-				if (currentScene == GameScene::Clear &&
-					inputManager.isKeyPressed(SDLK_SPACE, event))
-				{
-					running = false;
-				}
-				if (currentScene == GameScene::Clear &&
-					inputManager.isKeyPressed(SDLK_RETURN, event))
-				{
-					running = false;
-				}
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_RETURN, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
+				std::cout << "ゲームスタート！" << std::endl;
 			}
+			if (currentScene == GameScene::Clear &&
+				inputManager.isKeyPressed(SDLK_SPACE, event))
+			{
+				running = false;
+			}
+			if (currentScene == GameScene::Clear &&
+				inputManager.isKeyPressed(SDLK_RETURN, event))
+			{
+				running = false;
+			}
+		}
 		backGround.Draw(renderer);
 
 		if (currentScene == GameScene::Playing)
@@ -667,13 +667,13 @@ int main()
 				player.Reset(playerStartX, playerStartY);
 				camera.Start(screenWidth, screenHeight);
 			}
-				else if (player.isGoal)
-				{
-					std::cout << "Goal!" << std::endl;
-					currentScene = GameScene::Clear;
-					SDL_SetWindowTitle(window, "My Game - Clear");
-				}
+			else if (player.isGoal)
+			{
+				std::cout << "Goal!" << std::endl;
+				currentScene = GameScene::Clear;
+				SDL_SetWindowTitle(window, "My Game - Clear");
 			}
+		}
 
 		player.Draw(renderer, camera);
 		for (Block &block : stageData.blocks)
@@ -692,14 +692,14 @@ int main()
 		{
 			goal.Draw(renderer, camera);
 		}
-			if (currentScene == GameScene::Title)
-			{
-				titleScreen.Draw(renderer, screenWidth, screenHeight, font, "PRESS SPACE TO START");
-			}
-			else if (currentScene == GameScene::Clear)
-			{
-				titleScreen.Draw(renderer, screenWidth, screenHeight, font, "GAME CLEAR! PRESS SPACE");
-			}
+		if (currentScene == GameScene::Title)
+		{
+			titleScreen.Draw(renderer, screenWidth, screenHeight, font, "PRESS SPACE TO START");
+		}
+		else if (currentScene == GameScene::Clear)
+		{
+			titleScreen.Draw(renderer, screenWidth, screenHeight, font, "GAME CLEAR! PRESS SPACE");
+		}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
 		SDL_Delay(16); // 16ms待つ感じだね。これで大体60fpsくらいになるはず！
