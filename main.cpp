@@ -193,6 +193,12 @@ struct StageData
 	std::vector<Goal> goals;
 };
 
+enum class GameScene
+{
+	Title,
+	Playing,
+};
+
 class BackGround
 {
 public:
@@ -200,6 +206,18 @@ public:
 	{
 		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
 		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
+	}
+};
+
+class TitleScreen
+{
+public:
+	void Draw(SDL_Renderer *renderer, int screenWidth, int screenHeight)
+	{
+		SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+		SDL_SetRenderDrawColor(renderer, 192, 205, 202, 100);
+		SDL_Rect overlay = {0, 0, screenWidth, screenHeight};
+		SDL_RenderFillRect(renderer, &overlay);
 	}
 };
 
@@ -545,11 +563,15 @@ int main()
 	Player player;
 	Camera camera;
 	BackGround backGround;
+	TitleScreen titleScreen;
 	StageData stageData = CreateStage(player);
+	GameScene currentScene = GameScene::Title;
 	camera.Start(screenWidth, screenHeight);
 	player.Start();
 	player.LoadTexture(renderer, "assets/player.png", 2); // scaleで表示の倍率を設定できます。ドット絵のサイズ違いを入れるときには2にせず他の値を試してください。
 	player.Reset(playerStartX, playerStartY);
+	SDL_SetWindowTitle(window, "My Game - Press Space or Enter to Start");
+	std::cout << "タイトル画面: Space か Enter でスタート" << std::endl;
 
 	while (running)
 	{ // 一応Update()的なやつだね。
@@ -559,22 +581,40 @@ int main()
 			{
 				running = false;
 			}
+
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_SPACE, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
+				std::cout << "ゲームスタート！" << std::endl;
+			}
+			if (currentScene == GameScene::Title &&
+				inputManager.isKeyPressed(SDLK_RETURN, event))
+			{
+				currentScene = GameScene::Playing;
+				SDL_SetWindowTitle(window, "My Game");
+				std::cout << "ゲームスタート！" << std::endl;
+			}
 		}
 		backGround.Draw(renderer);
 
-		player.Update(inputManager, stageData.blocks, stageData, fallResetY);
-		camera.Update(player.visualPixotX, player.visualPixotY);
+		if (currentScene == GameScene::Playing)
+		{
+			player.Update(inputManager, stageData.blocks, stageData, fallResetY);
+			camera.Update(player.visualPixotX, player.visualPixotY);
 
-		if (player.isDead)
-		{
-			std::cout << "死んだ！" << std::endl;
-			player.Reset(playerStartX, playerStartY);
-			camera.Start(screenWidth, screenHeight);
-		}
-		else if (player.isGoal)
-		{
-			std::cout << "Goal!" << std::endl;
-			running = false;
+			if (player.isDead)
+			{
+				std::cout << "死んだ！" << std::endl;
+				player.Reset(playerStartX, playerStartY);
+				camera.Start(screenWidth, screenHeight);
+			}
+			else if (player.isGoal)
+			{
+				std::cout << "Goal!" << std::endl;
+				running = false;
+			}
 		}
 
 		player.Draw(renderer, camera);
@@ -585,11 +625,18 @@ int main()
 		for (Hazard &hazard : stageData.hazards)
 		{
 			hazard.Draw(renderer, camera);
-			hazard.Update();
+			if (currentScene == GameScene::Playing)
+			{
+				hazard.Update();
+			}
 		}
 		for (Goal &goal : stageData.goals)
 		{
 			goal.Draw(renderer, camera);
+		}
+		if (currentScene == GameScene::Title)
+		{
+			titleScreen.Draw(renderer, screenWidth, screenHeight);
 		}
 
 		SDL_RenderPresent(renderer); // ここまで色々renrederをこねくりまわしたけどこいつを実行すると反映されます！最終的にこいつを書いてねって感じだね。
