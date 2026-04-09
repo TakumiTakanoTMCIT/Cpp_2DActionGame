@@ -25,15 +25,20 @@ public:
 class Block
 {
 public:
-	int x = 500, y = 500;
+	int x = 500, y = 450;
 	int width = 100, height = 100;
+
+public:
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
 
 public:
 	void Draw(SDL_Renderer *renderer)
 	{
 		SDL_Rect rect_block = {x, y, width, height};
-		SDL_SetRenderDrawColor(renderer, 100, 100, 100,
-							   255); // ブロックの色を灰色に設定
+		SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255); // ブロックの色を灰色に設定
 		SDL_RenderFillRect(renderer, &rect_block);
 	}
 };
@@ -42,14 +47,8 @@ class Player
 {
 public:
 	int r = 255, g = 80, b = 80; // 四角形の色
-
-public:
 	int x = 300, y = 0; // 四角形の位置
-
-public:
 	int width = 200, height = 120; // 四角形のサイズ
-
-public:
 	int speed = 10;
 	float yVelocity = 0.0f;
 	float gravity = 0.5f;
@@ -65,14 +64,32 @@ private:
 private:
 	void StayThisGround(int groundY)
 	{
-		y = groundY;
+		y = groundY - height; // プレイヤーの下端が地面に接するように位置を調整
 		yVelocity = 0.0f;
 		isGround = true;
 	}
 
 public:
+	int Left() { return x; }
+	int Right() { return x + width; }
+	int Top() { return y; }
+	int Bottom() { return y + height; }
+
+private:
+	bool IsColliderInBlock(Block &block)
+	{
+		bool isOverlapX = Right() > block.Left() && Left() < block.Right();
+		bool isOverlapY = Bottom() > block.Top() && Top() < block.Bottom();
+		return isOverlapX && isOverlapY;
+	}
+
+public:
 	void Update(int groundY, InputManager &inputManager, Block &block)
 	{
+		bool wasGround = isGround;
+		isGround = false;
+
+		int previousX = x;
 		if (inputManager.isKeyHeld(SDLK_LEFT))
 		{
 			x -= speed; // 左に移動
@@ -82,15 +99,15 @@ public:
 			x += speed; // 右に移動
 		}
 
-		// 移動先に障害物があったらそこで停止させる処理を記述します。
-		if (block.x < x + width)
+		if (IsColliderInBlock(block))
 		{
-			x -= speed; // 障害物に当たったら元の位置に戻す
+			x = previousX;
 		}
 
-		if (inputManager.isKeyHeld(SDLK_SPACE) && isGround)
+		if (inputManager.isKeyHeld(SDLK_SPACE) && wasGround)
 		{
 			Jump();
+			wasGround = false;
 		}
 
 		yVelocity += gravity;
@@ -99,28 +116,31 @@ public:
 			yVelocity = maxFallSpeed;
 		}
 
+		int previousY = y;
 		y += static_cast<int>(yVelocity);
 
-		if (y > groundY)
+		if (IsColliderInBlock(block))
+		{
+			y = previousY;
+			yVelocity = 0.0f;
+			if (previousY + height <= block.Top())
+			{
+				isGround = true;
+			}
+		}
+
+		if (y + height > groundY)
 		{
 			StayThisGround(groundY);
-		}
-		else
-		{
-			isGround = false;
 		}
 	}
 
 public:
 	void Draw(SDL_Renderer *renderer)
 	{
-		SDL_Rect rect_player = {
-			x, y - height, width,
-			height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
+		SDL_Rect rect_player = {x, y, width, height}; // プレイヤーの描画だから結構ここで形をいじって大丈夫
 		SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-		SDL_RenderFillRect(
-			renderer,
-			&rect_player); // rectを描くんだ〜！Fillだからまだわかりやすいかな？
+		SDL_RenderFillRect(renderer, &rect_player); // rectを描くんだ〜！Fillだからまだわかりやすいかな？
 	}
 };
 
@@ -130,8 +150,7 @@ public:
 	void Draw(SDL_Renderer *renderer)
 	{
 		SDL_SetRenderDrawColor(renderer, 40, 120, 140, 255);
-		SDL_RenderClear(
-			renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
+		SDL_RenderClear(renderer); // 背景色で塗る感じだよね。まじで名前がわかりにくい、Fillとかにしやがれよ
 	}
 };
 
@@ -145,8 +164,7 @@ public:
 	void Draw(SDL_Renderer *renderer)
 	{
 		SDL_Rect rect_ground = {x, y, width, height};
-		SDL_SetRenderDrawColor(renderer, 139, 69, 19,
-							   255); // 地面の色を茶色に設定
+		SDL_SetRenderDrawColor(renderer, 139, 69, 19, 255); // 地面の色を茶色に設定
 		SDL_RenderFillRect(renderer, &rect_ground); // 地面を描く感じだね。
 	}
 };
